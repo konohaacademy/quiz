@@ -9,6 +9,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ちしきクエスト">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap">
@@ -235,6 +239,13 @@ ruby rt { font-size: .5em; font-weight: 700; color: var(--sub); }
 .avapick button.on { border-color: var(--buzz); }
 .row2 { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .note { font-size: .8rem; color: var(--sub); line-height: 1.6; }
+/* ホーム画面に追加の案内 */
+.a2hs { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; background: var(--paper); border: 2px dashed color-mix(in srgb, var(--buzz) 45%, var(--line)); border-radius: var(--r); padding: 14px 16px; }
+.a2hs .ic { font-size: 1.8rem; line-height: 1; grid-row: span 3; }
+.a2hs b { font-size: 1rem; }
+.a2hs ol { margin: 4px 0 0; padding-left: 1.3em; font-size: .88rem; line-height: 1.7; }
+.a2hs .row2 { margin-top: 6px; }
+.a2hs .share { display: inline-block; border: 1.5px solid currentColor; border-radius: 4px; padding: 0 4px; font-size: .8em; }
 .road { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 4px; text-align: center; font-size: .7rem; color: var(--sub); }
 .road b { display: block; font-family: var(--f-disp); color: var(--gold); font-size: .95rem; }
 .radar { width: 100%; max-width: 360px; justify-self: center; }
@@ -337,7 +348,7 @@ let CUR = null;   // { name, token, ava, save }
 const P = () => CUR && CUR.save;
 function newSave(o = {}) {
   return { v: SAVE_V, st: {}, xp: 0, streak: 0, best: 0, last: 0, qd: { day: 0, ids: [], i: 0, done: false }, hs: 0, ta: 0, ttl: {}, cnt: { ok: 0, all: 0 }, catLast: {},
-    set: { kanji: o.kanji ?? 3, sound: true, speed: 7, size: 1 }, logs: [] };
+    set: { kanji: o.kanji ?? 3, sound: true, speed: 7, size: 1, lv: o.lv ?? 1 }, logs: [] };
 }
 function players() { return ls.get('cq.players', []); }
 function savePlayers(list) { ls.set('cq.players', list); }
@@ -409,28 +420,53 @@ function record(q, ok, ms, mode) {
 function levelOf(xp) { const lv = Math.floor(Math.sqrt(xp / 40)) + 1; const a = 40 * (lv - 1) ** 2, b = 40 * lv ** 2; return { lv, frac: (xp - a) / (b - a), toNext: b - xp }; }
 
 function qsOf(cat, star) { return visible().filter(q => q.c === cat && (!star || q.s === star)); }
+// ★のひらき方（2026-10-21 にゆるめた。前は「★n を6わり正かい」で、★1だけで1分野17問ほど解くことになっていた）
+//   ・せっていの「はじめる★」までは さいしょから ひらいている
+//   ・その分野の ★n で 3問 正かい（しかも ためした問題の半分いじょう 正かい）すると ★n+1 がひらく
+//   ・いちど 正かいした★は、せっていを下げても ひらいたまま
+const UNLOCK_N = 3;
+function baseStar() { const v = +(P().set.lv || 1); return Math.max(1, Math.min(5, v)); }
+function starStat(cat, star) {
+  let k = 0, tried = 0;
+  for (const q of qsOf(cat, star)) { const x = stOf(q.id); if (!x || !x[0]) continue; tried++; if (x[1] > 0) k++; }
+  return { k, tried };
+}
+function needToOpen(cat, star) {   // ★star をひらくのに、★(star-1) で あと何問 正かいがいるか
+  const { k, tried } = starStat(cat, star - 1);
+  return Math.max(UNLOCK_N - k, tried - 2 * k, 0) || 1;   // これから解く問題も ためした数に 入るので「半分」は tried−2k
+}
 function unlocked(cat, star) {
-  if (star <= 1) return true;
+  if (star <= baseStar()) return true;
+  if (qsOf(cat, star).some(q => knows(q.id))) return true;
   const prev = qsOf(cat, star - 1); if (!prev.length) return unlocked(cat, star - 1);
-  return prev.filter(q => knows(q.id)).length / prev.length >= 0.6;
+  const { k, tried } = starStat(cat, star - 1);
+  return k >= Math.min(UNLOCK_N, prev.length) && k * 2 >= tried;
 }
 function topStar(cat) { let s = 1; for (let k = 2; k <= 5; k++) if (unlocked(cat, k)) s = k; return s; }
+// 新しい問題を出す★：ふつうは ひらいている いちばん上。そこで まちがいが多い（4問いじょう ためして 半分みまん）ときは 1つ下で力をつける
+function aimStar(cat) {
+  const t = topStar(cat); const { k, tried } = starStat(cat, t);
+  return (t > baseStar() && tried >= 4 && k * 2 < tried) ? t - 1 : t;
+}
 function dueList() {
   const d = today();
   return visible().filter(q => { const s = stOf(q.id); return s && s[3] <= d; })
     .sort((a, b) => (stOf(a.id)[2] - stOf(b.id)[2]) || (stOf(a.id)[3] - stOf(b.id)[3]));
 }
-// 新しい問題を選ぶ：いちばん長く遊んでいない分野から、ひらいている★の低いほうを先に。前の問題と話がつながるもの（同じ#）を優先。
+// 新しい問題を選ぶ：いちばん長く遊んでいない分野から、ねらいの★（aimStar）に近いものを先に。前の問題と話がつながるもの（同じ#）を優先。
+//   ⚠ 前は「ひらいている★の低いほう」を先にしていたので、★2がひらいても ★1をぜんぶ解くまで ★2が出なかった。
 function pickNew(n, opt = {}) {
   const s = P(); const taken = new Set(opt.not || []); const out = [];
   const cats = (opt.cats || B.cats.map(c => c.id)).slice().sort((a, b) => (s.catLast[a] || 0) - (s.catLast[b] || 0));
   let ci = 0, prev = null, guard = 0;
   while (out.length < n && guard++ < 200) {
     const cat = cats[ci % cats.length]; ci++;
-    const top = opt.star ? opt.star : topStar(cat);
+    const top = opt.star ? opt.star : topStar(cat); const aim = opt.star ? opt.star : aimStar(cat);
     let pool = visible().filter(q => q.c === cat && !stOf(q.id) && !taken.has(q.id) && (opt.star ? q.s === opt.star : q.s <= top));
+    if (!opt.star) { const hi = pool.filter(q => q.s >= baseStar()); if (hi.length) pool = hi; }   // はじめる★より下は、上がのこっていないときだけ
     if (!pool.length) { if (ci > cats.length * 3 && !out.length) break; continue; }
-    const minS = Math.min(...pool.map(q => q.s)); pool = pool.filter(q => q.s === minS);
+    const dist = q => Math.abs(q.s - aim) * 2 + (q.s > aim ? 1 : 0);   // ねらいの★ → 1つ下 → 1つ上 … の順
+    const best = Math.min(...pool.map(dist)); pool = pool.filter(q => dist(q) === best);
     let pick = null;
     if (prev && prev.g) pick = pool.find(q => q.g && q.g.some(t => prev.g.includes(t)));
     if (!pick) pick = pool.sort((a, b) => a.id.localeCompare(b.id, 'ja', { numeric: true }))[Math.floor(Math.random() * Math.min(3, pool.length))];
@@ -438,6 +474,15 @@ function pickNew(n, opt = {}) {
     if (opt.cats && opt.cats.length === 1) ci = 0;
   }
   return out;
+}
+function refreshQuest() {
+  const s = P(); const qd = s.qd;
+  if (qd.day !== today() || qd.done) return;
+  const kept = qd.ids.slice(0, qd.i);
+  const due = dueList().map(q => q.id).filter(id => !kept.includes(id)).slice(0, Math.max(0, 4 - kept.length));
+  const fresh = pickNew(Math.max(0, 8 - kept.length - due.length), { not: kept.concat(due) });
+  qd.ids = kept.concat(shuffle(due.concat(fresh)));
+  storeSave();
 }
 function todayQuest() {
   const s = P(); const d = today();
@@ -516,6 +561,9 @@ function gate(msg) {
   $('#g-new').onclick = () => registerForm();
   if ($('#g-login')) $('#g-login').onclick = () => loginForm();
 }
+// 学年 → はじめる★（年長〜小2=★1、小3・4=★2、小5・6=★3、中学生=★4、高校生・おとな=★4。正かいで どんどん上がる）
+const GRADE_LV = [1, 1, 1, 2, 2, 3, 3, 4, 4, 4];
+function lvOptions(v) { return [1, 2, 3, 4, 5].map(k => `<option value="${k}" ${k === v ? 'selected' : ''}>${'★'.repeat(k)}（${STAR_NAME[k]}）から</option>`).join(''); }
 function registerForm() {
   let ava = AVATARS[Math.floor(Math.random() * AVATARS.length)];
   show(`<button class="back" data-go="gate">‹ もどる</button>
@@ -525,19 +573,20 @@ function registerForm() {
     <div><b class="small">アイコン</b><div class="avapick" id="r-ava">${AVATARS.map(a => `<button type="button" data-a="${a}" class="${a === ava ? 'on' : ''}">${a}</button>`).join('')}</div></div>
     <label>学年<select id="r-grade">${['年長', '小1', '小2', '小3', '小4', '小5', '小6', '中学生', '高校生', 'おとな'].map((g, i) => `<option value="${i}" ${i === 2 ? 'selected' : ''}>${g}</option>`).join('')}</select></label>
     <label>読める漢字<select id="r-kanji">${kanjiOptions(3)}</select></label>
+    <label>はじめる レベル<select id="r-lv">${lvOptions(1)}</select></label>
     ${API ? `<label>あいことば（すうじ4つ）<input id="r-pin" class="pins" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
     <p class="note">あいことばは、ほかの たんまつで つづきを するときに つかうよ。おうちの人と いっしょに きめてね。</p>` : `<p class="note">記ろくは この たんまつの中に のこるよ。</p>`}
     <p class="err" id="r-err"></p>
     <button class="big red" type="submit">スタート！</button>
   </form>`, 'reg');
   $('#r-ava').onclick = e => { const b = e.target.closest('[data-a]'); if (!b) return; ava = b.dataset.a; $('#r-ava').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
-  $('#r-grade').onchange = e => { const g = +e.target.value; $('#r-kanji').innerHTML = kanjiOptions(g <= 2 ? 3 : Math.min(g, 7)); };
+  $('#r-grade').onchange = e => { const g = +e.target.value; $('#r-kanji').innerHTML = kanjiOptions(g <= 2 ? 3 : Math.min(g, 7)); $('#r-lv').innerHTML = lvOptions(GRADE_LV[g] || 1); };
   $('#f-reg').onsubmit = async e => {
     e.preventDefault();
     const name = $('#r-name').value.trim(); const kanji = +$('#r-kanji').value; const grade = +$('#r-grade').value;
     if (!name) return;
     if (players().some(p => p.name === name)) { $('#r-err').textContent = 'その名前は この たんまつで もう使っているよ'; return; }
-    let token = '', save = newSave({ kanji });
+    let token = '', save = newSave({ kanji, lv: +$('#r-lv').value });
     if (API) {
       const pin = $('#r-pin').value;
       if (!/^\d{4}$/.test(pin)) { $('#r-err').textContent = 'あいことばは すうじ4つだよ'; return; }
@@ -603,6 +652,39 @@ async function enter(p) {
   }
 }
 
+// ════════════════════════════ ホーム画面に追加（アプリのように使う） ════════════════════════════
+// ⚠ iPhone は、Safari の中と ホーム画面のアプリとで 記ろくの置き場が別。だから「あいことばで つないでから 追加」を案内する。
+const STANDALONE = window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+const UA = navigator.userAgent || '';
+const IS_IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IN_APP = /Line\/|FBAN|FBAV|Instagram/i.test(UA);
+let installEv = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEv = e; if (SCREEN === 'home' || SCREEN === 'settings') ROUTES[SCREEN](); });
+window.addEventListener('appinstalled', () => { installEv = null; ls.set('cq.a2hs', 'done'); toast('ホーム画面に ついかしたよ！'); });
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+function a2hsCard(where) {
+  if (STANDALONE) return '';
+  if (where === 'home' && ls.get('cq.a2hs')) return '';
+  const R = t => rb(t).replace(/\[\[(.+?)\]\]/g, '<b>$1</b>');   // {漢字|よみ} はルビ、[[ ]] は太字
+  const ADD = '{追加|ついか}';
+  // iPhone は Safari と ホーム画面のアプリで 記ろくの置き場が別（Android の Chrome は同じ）
+  const link = IS_IOS && !(CUR && CUR.token) ? `<p class="note" style="grid-column:2">${R('⚠ さきに「せってい」→「記ろくを つなぐ」で あいことばを きめてね。iPhone は ホーム画面から ひらくと、べつの たんまつ あつかいに なるよ。')}</p>` : '';
+  const after = IS_IOS ? `<p class="note" style="grid-column:2">${R('ホーム画面の アイコンから ひらいたら、はじめの 1回だけ「ほかの たんまつで 作った人」から ニックネームと あいことばで 入ってね。')}</p>` : '';
+  let how;
+  if (IN_APP) how = `<ol><li>${R('右上の [[︙]] や [[…]] から「[[ブラウザで ひらく]]」')}</li><li>${R('ひらいたら、もう一度 この あんないを 見てね')}</li></ol>`;
+  else if (IS_IOS) how = `<ol><li><span class="share">□↑</span> ${R('[[{共有|きょうゆう}ボタン]]（画面の 下か 上）を おす')}</li><li>${R(`「[[ホーム画面に${ADD}]]」を えらぶ（なければ 下へ スクロール）`)}</li><li>${R(`右上の「[[${ADD}]]」を おす`)}</li></ol>`;
+  else if (installEv) how = `<div class="row2"><button class="btn" id="a2-go">📲 ${R(`ホーム画面に ${ADD}する`)}</button></div>`;
+  else how = `<ol><li>${R('ブラウザの メニュー（[[︙]]）を ひらく')}</li><li>${R(`「[[ホーム画面に${ADD}]]」か「[[アプリを インストール]]」を えらぶ`)}</li></ol>`;
+  return `<div class="sec"><div class="a2hs"><span class="ic">📲</span><b>アプリみたいに つかおう</b>
+    <div class="small muted">${R(`ホーム画面に ${ADD}すると、アイコン 1つで すぐ ひらけるよ。電波が なくても あそべるよ。`)}</div>
+    <div>${how}${where === 'home' ? `<div class="row2"><button class="btn soft" id="a2-no">あとで（せっていから いつでも）</button></div>` : ''}</div>
+    ${link}${after}</div></div>`;
+}
+function a2hsWire() {
+  if ($('#a2-go')) $('#a2-go').onclick = async () => { if (!installEv) return; installEv.prompt(); try { await installEv.userChoice; } catch (e) {} installEv = null; ROUTES[SCREEN] && ROUTES[SCREEN](); };
+  if ($('#a2-no')) $('#a2-no').onclick = () => { ls.set('cq.a2hs', 'later'); home(); };
+}
+
 // ════════════════════════════ ホーム ════════════════════════════
 function home() {
   const s = P(); const l = levelOf(s.xp); const qd = todayQuest(); const due = dueList().length;
@@ -620,6 +702,7 @@ function home() {
     <div class="dots">${qd.ids.map((_, i) => `<i class="${i < qd.i ? 'd' : ''}"></i>`).join('')}</div>
     <div class="row">${done ? `<button class="big ghost" data-go="map">ちしきの地図へ</button>` : `<button class="big" data-go="quest">${qd.i ? 'つづける' : 'はじめる'} ▶</button>`}</div>
   </div></div>
+  ${a2hsCard('home')}
   <div class="sec"><h2>あそびかた</h2><div class="modes">
     <button class="mode" data-go="map"><span class="ic">🗺</span><b>ちしきの地図</b><span>12の分野を ★1から ★5へ</span></button>
     <button class="mode" data-go="hayaoshi"><span class="ic">🔴</span><b>はやおし</b><span>問題文が 出てくるとちゅうで ピンポン！</span></button>
@@ -628,12 +711,13 @@ function home() {
     <button class="mode" data-go="zukan"><span class="ic">📚</span><b>ずかん</b><span>正かいした ちしきを 見かえす</span></button>
     <button class="mode" data-go="titles"><span class="ic">🎖</span><b>しょうごう</b><span>${Object.keys(s.ttl).length} / ${TITLES.length} こ</span></button>
     ${API && CUR.token ? `<button class="mode" data-go="rank"><span class="ic">🏆</span><b>ランキング</b><span>今週の ポイント</span></button>` : ''}
-    <button class="mode" data-go="settings"><span class="ic">⚙️</span><b>せってい</b><span>ふりがな・音・文字の大きさ</span></button>
+    <button class="mode" data-go="settings"><span class="ic">⚙️</span><b>せってい</b><span>レベル・ふりがな・音・文字の大きさ</span></button>
   </div></div>
   <div class="sec"><h2>ちしきの かたち</h2>${radar()}
     <div class="road">${[1, 2, 3, 4, 5].map(k => `<div><b>${'★'.repeat(k)}</b>${STAR_NAME[k]}</div>`).join('')}</div>
   </div>
   <p class="note" style="margin-top:24px">${esc(CUR.name)} であそんでいます。 <button class="back small" data-go="gate">ほかの人に かわる</button></p>`, 'home');
+  a2hsWire();
 }
 // 12の分野ごとに「正かいしたことがある」わりあいを、かたちで見せる
 function radar() {
@@ -658,7 +742,7 @@ function ringSvg(frac, color) {
 }
 function mapScreen() {
   show(`${topbar(true)}<h1 style="font-size:1.5rem">ちしきの地図</h1>
-  <p class="muted small">★1の問題を 6わり 正かいすると、★2が ひらくよ。★5は 高校生クイズの レベル！</p>
+  <p class="muted small">その★で ${UNLOCK_N}問 正かいすると、つぎの★が ひらくよ。★5は 高校生クイズの レベル！ はじめる★は「せってい」で かえられるよ。</p>
   <div class="map" style="margin-top:12px">${B.cats.map(c => {
     const a = qsOf(c.id); const k = a.filter(q => knows(q.id)).length;
     return `<button class="isle" data-go="cat:${c.id}">${ringSvg(a.length ? k / a.length : 0, c.color)}<span class="em">${c.icon}</span><b>${rb(c.name)}</b><span class="st">${'★'.repeat(topStar(c.id))} <span class="num">${k}/${a.length}</span></span></button>`;
@@ -673,7 +757,7 @@ function catScreen(cid) {
     const fresh = a.filter(q => !stOf(q.id)).length;
     return `<div class="lv"><div class="stars">${'★'.repeat(st)}<small>${STAR_NAME[st]}</small></div>
       <div><div class="bar"><i style="width:${m / a.length * 100}%;background:${c.color}"></i><i style="width:${(k - m) / a.length * 100}%;background:color-mix(in srgb, ${c.color} 35%, transparent)"></i></div>
-      <div class="small muted num">おぼえた ${m}・正かい ${k}・ぜんぶ ${a.length}</div>${open ? '' : `<div class="lock">🔒 ★${st - 1}を 6わり 正かいで ひらく</div>`}</div>
+      <div class="small muted num">おぼえた ${m}・正かい ${k}・ぜんぶ ${a.length}</div>${open ? '' : `<div class="lock">🔒 ★${st - 1}で あと ${needToOpen(cid, st)}問 正かいすると ひらく</div>`}</div>
       <button class="btn" data-play="${cid}:${st}" ${open ? '' : 'disabled'}>${fresh ? 'あそぶ' : 'もう一度'}</button></div>`;
   }).join('')}</div>
   <div class="row2" style="margin-top:16px"><button class="btn soft" data-go="zukan:${cid}">この分野の ずかん</button></div>`, 'cat');
@@ -943,6 +1027,8 @@ function settings() {
   const st = P().set;
   show(`${topbar(true)}<h1 style="font-size:1.5rem">せってい</h1>
   <div class="form" style="margin-top:12px">
+    <label>はじめる レベル<select id="s-lv">${lvOptions(baseStar())}</select></label>
+    <p class="note">えらんだ★までの問題が すぐ あそべるよ。そこから上は、その★で ${UNLOCK_N}問 正かいするたびに 1つずつ ひらくよ。まちがいが つづくと、1つ下の★の問題も まぜるよ。</p>
     <label>読める漢字<select id="s-kanji">${kanjiOptions(st.kanji)}</select></label>
     <p class="note">ここより上の学年の漢字に ふりがなが つくよ。3年生までの漢字は、問題の中に そのまま 書いてあるよ。</p>
     <label>文字の大きさ<select id="s-size">${[[0.9, 'ふつうより小さい'], [1, 'ふつう'], [1.15, '大きい'], [1.3, 'とても大きい']].map(([v, t]) => `<option value="${v}" ${v === st.size ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -955,13 +1041,17 @@ function settings() {
     <p class="note">いまは この たんまつの中だけに 記ろくが あります。あいことばを きめると、ほかの たんまつでも つづきが できて、ランキングにも のります。</p>
     <label>あいことば（すうじ4つ）<input id="k-pin" class="pins" inputmode="numeric" maxlength="4" required></label>
     <p class="err" id="k-err"></p><button class="big" type="submit">つなぐ</button></form>` : ''}
+  ${a2hsCard('settings')}
   <div class="row2" style="margin-top:16px"><button class="btn soft" data-go="gate">ほかの人に かわる</button><button class="btn soft" id="s-out">この たんまつから ${esc(CUR.name)} を はずす</button></div>`, 'settings');
   const apply = () => {
+    const lv = +$('#s-lv').value;
+    if (lv !== baseStar()) { st.lv = lv; refreshQuest(); }
     st.kanji = +$('#s-kanji').value; st.size = +$('#s-size').value; st.speed = +$('#s-speed').value; st.sound = $('#s-sound').checked;
     document.documentElement.style.setProperty('--qsize', (1.25 * st.size) + 'rem'); storeSave(); $('#s-msg').textContent = '';
     toast('ほぞんしたよ');
   };
-  ['#s-kanji', '#s-size', '#s-speed', '#s-sound'].forEach(id => $(id).onchange = apply);
+  a2hsWire();
+  ['#s-lv', '#s-kanji', '#s-size', '#s-speed', '#s-sound'].forEach(id => $(id).onchange = apply);
   if ($('#f-link')) $('#f-link').onsubmit = async e => {
     e.preventDefault();
     const pin = $('#k-pin').value;
