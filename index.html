@@ -403,7 +403,8 @@ function record(q, ok, ms, mode) {
   const s = P(); const d = today();
   const x = s.st[q.id] || [0, 0, 0, 0, 0];
   x[0]++; if (ok) x[1]++;
-  if (ok) { x[2] = Math.min(x[2] + 1, INTERVAL.length - 1); x[3] = d + INTERVAL[x[2]]; }
+  // はじめて見て すぐ正解した問題は、あした ではなく 3日後に（箱2）。前は あしたにまた出て「同じ問題ばかり」になった
+  if (ok) { x[2] = Math.min(x[0] === 1 ? 2 : x[2] + 1, INTERVAL.length - 1); x[3] = d + INTERVAL[x[2]]; }
   else { x[2] = 0; x[3] = d + 1; }
   x[4] = d; s.st[q.id] = x;
   s.cnt.all++; if (ok) s.cnt.ok++;
@@ -449,8 +450,12 @@ function aimStar(cat) {
   return (t > baseStar() && tried >= 4 && k * 2 < tried) ? t - 1 : t;
 }
 function dueList() {
-  const d = today();
-  return visible().filter(q => { const s = stOf(q.id); return s && s[3] <= d; })
+  const d = today(); const base = baseStar();
+  // はじめる★より下の問題は、まちがえたもの（箱0）だけ ふくしゅうする（大人が★1の正かいを くり返さないように）
+  // 前のしくみで「はじめて正かい→あした」になっていたもの（解いた1回・正かい1回・箱1）は 3日後あつかい
+  return visible().filter(q => { const s = stOf(q.id); if (!s || s[4] === d) return false;
+    const next = (s[0] === 1 && s[1] === 1 && s[2] === 1) ? s[4] + 3 : s[3];
+    return next <= d && (q.s >= base || s[2] === 0); })
     .sort((a, b) => (stOf(a.id)[2] - stOf(b.id)[2]) || (stOf(a.id)[3] - stOf(b.id)[3]));
 }
 // 新しい問題を選ぶ：いちばん長く遊んでいない分野から、ねらいの★（aimStar）に近いものを先に。前の問題と話がつながるもの（同じ#）を優先。
@@ -475,11 +480,12 @@ function pickNew(n, opt = {}) {
   }
   return out;
 }
+const QUEST_DUE = 3;   // きょうのクエスト8問のうち、ふくしゅうは3問まで（のこりは新しい問題）
 function refreshQuest() {
   const s = P(); const qd = s.qd;
   if (qd.day !== today() || qd.done) return;
   const kept = qd.ids.slice(0, qd.i);
-  const due = dueList().map(q => q.id).filter(id => !kept.includes(id)).slice(0, Math.max(0, 4 - kept.length));
+  const due = dueList().map(q => q.id).filter(id => !kept.includes(id)).slice(0, Math.max(0, QUEST_DUE - kept.length));
   const fresh = pickNew(Math.max(0, 8 - kept.length - due.length), { not: kept.concat(due) });
   qd.ids = kept.concat(shuffle(due.concat(fresh)));
   storeSave();
@@ -487,7 +493,7 @@ function refreshQuest() {
 function todayQuest() {
   const s = P(); const d = today();
   if (s.qd.day !== d) {
-    const due = dueList().slice(0, 4).map(q => q.id);
+    const due = dueList().slice(0, QUEST_DUE).map(q => q.id);
     const fresh = pickNew(8 - due.length, { not: due });
     s.qd = { day: d, ids: shuffle(due.concat(fresh)), i: 0, done: false, ok: 0 };
     storeSave();
@@ -890,6 +896,8 @@ function finish() {
 }
 
 // ════════════════════════════ はやおし ════════════════════════════
+// まだ解いていない問題を、はじめる★より上 → 下 の順に（それぞれの中は まぜる）
+function preferNew(list) { const b = baseStar(); return shuffle(list.filter(q => q.s >= b)).concat(shuffle(list.filter(q => q.s < b))); }
 function hsPool() {
   // ひらいている★の 4たく。問題文が長めのもの
   return visible().filter(q => q.t === 'choice' && plain(q.q).length >= 18 && q.s <= topStar(q.c));
@@ -897,9 +905,15 @@ function hsPool() {
 function startHayaoshi() {
   const pool = hsPool();
   if (pool.length < 5) { toast('もう少し 問題を といてから あそべるよ'); return; }
-  // おぼえかけの問題を半分、新しい問題を半分
-  const seen = shuffle(pool.filter(q => stOf(q.id))), fresh = shuffle(pool.filter(q => !stOf(q.id)));
-  const ids = shuffle(seen.slice(0, 5).concat(fresh.slice(0, 10 - Math.min(5, seen.length)))).slice(0, 10).map(q => q.id);
+  // ふくしゅうの時期が来た問題・まちがえた問題を3問まで、のこりは新しい問題（はじめる★より上を先に）
+  //   ⚠ 前は「見たことのある問題」から毎回5問 出していたので、同じ問題ばかりになった
+  const due = new Set(dueList().map(q => q.id));
+  const seen = shuffle(pool.filter(q => due.has(q.id) || (stOf(q.id) && stOf(q.id)[2] === 0 && stOf(q.id)[4] !== today())));
+  const fresh = preferNew(pool.filter(q => !stOf(q.id)));
+  const pickSeen = seen.slice(0, 3);
+  let ids = pickSeen.concat(fresh.slice(0, 10 - pickSeen.length));
+  if (ids.length < 10) ids = ids.concat(shuffle(pool.filter(q => !ids.includes(q) && (!stOf(q.id) || stOf(q.id)[4] !== today()))).slice(0, 10 - ids.length));
+  ids = shuffle(ids).map(q => q.id);
   G = { mode: 'hayaoshi', ids, i: 0, score: 0, res: ids.map(() => ''), gain: 0 };
   hsQ();
 }
@@ -960,7 +974,7 @@ function hsEnd() {
 function startTA() {
   const pool = visible().filter(q => q.t !== 'order' && q.s <= topStar(q.c) && plain(q.q).length <= 70);
   if (pool.length < 10) { toast('もう少し 問題を といてから あそべるよ'); return; }
-  const list = shuffle(pool);
+  const list = preferNew(pool.filter(q => !stOf(q.id))).concat(shuffle(pool.filter(q => stOf(q.id))));   // まだ解いていない問題を先に
   G = { mode: 'ta', list, i: 0, ok: 0, ng: 0, combo: 0, maxc: 0, end: performance.now() + 60000, gain: 0 };
   taQ();
   G.tick = setInterval(() => {
