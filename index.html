@@ -251,6 +251,44 @@ ruby rt { font-size: .5em; font-weight: 700; color: var(--sub); }
 .radar { width: 100%; max-width: 360px; justify-self: center; }
 .toast { position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 99px; font-weight: 800; z-index: 60; box-shadow: var(--shadow); max-width: 90vw; }
 .loading { min-height: 60vh; display: grid; place-items: center; color: var(--sub); font-weight: 800; }
+/* ── 写真（Wikimedia Commons。作者とライセンスを必ず出す） ── */
+.ph { margin: 12px 0 0; border-radius: 16px; overflow: hidden; background: var(--tile); }
+.ph img { display: block; width: 100%; height: auto; max-height: 300px; object-fit: contain; background: var(--tile); }
+.ph.q img { max-height: 260px; }
+.ph figcaption { font-size: .68rem; color: var(--sub); padding: 3px 10px 5px; line-height: 1.5; }
+.ph figcaption a { color: inherit; }
+.fb .ph { margin: 0; background: var(--paper); }
+.fb .ph img { max-height: 220px; }   /* こたえあわせでは「つぎへ」が画面から押し出されないように低め */
+.note a { color: inherit; }
+.ph img.svg, .pc img.svg, .met img.svg { background: #fff; }   /* 図（SVG）は すけているので、暗い画面でも線が見えるように白をしく */
+/* ── どんどん ── */
+.ddpick { display: grid; gap: 10px; }
+.ddpick .mode { min-height: 0; grid-template-columns: auto 1fr; align-items: center; column-gap: 12px; }
+.ddpick .mode .ic { grid-row: span 2; font-size: 1.9rem; }
+.ddcats { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+@media (min-width: 560px) { .ddcats { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+.ddcats button { border: 0; border-radius: 14px; padding: 10px; background: var(--paper); box-shadow: var(--shadow); font-weight: 800; font-size: .85rem; display: flex; gap: 6px; align-items: center; text-align: left; line-height: 1.3; }
+.ddcats button i { font-style: normal; font-size: 1.2rem; }
+.lead1 { line-height: 2; }
+details.more2 summary { cursor: pointer; font-weight: 800; color: var(--sub); font-size: .85rem; list-style: none; }
+details.more2 summary::-webkit-details-marker { display: none; }
+details.more2[open] summary { margin-bottom: 6px; }
+.fbrow { display: flex; gap: 10px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.met { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; width: 100%; }
+.met img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; background: var(--tile); display: block; }
+/* ── 写真ずかん ── */
+.pgrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+@media (min-width: 560px) { .pgrid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+.pc { border: 0; padding: 0; border-radius: 14px; overflow: hidden; background: var(--paper); box-shadow: var(--shadow); display: grid; text-align: left; }
+.pc img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--tile); }
+.pc span { font-size: .72rem; font-weight: 800; padding: 4px 6px 6px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.9em; }
+.pc.lock img { filter: grayscale(1) blur(6px) brightness(1.1); }
+.pc.lock span { color: var(--sub); }
+.zk .th { float: right; width: 64px; height: 64px; object-fit: cover; border-radius: 10px; margin-left: 8px; }
+.modal { position: fixed; inset: 0; z-index: 70; background: rgba(10,16,28,.6); display: grid; place-items: end center; padding: 12px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+@media (min-width: 560px) { .modal { place-items: center; } }
+.modal .card { width: min(100%, 560px); max-height: 88vh; overflow: auto; animation: rise .2s; }
+.okw { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
@@ -314,6 +352,18 @@ function beep(kind) {
   } catch (e) {}
 }
 
+// ── 写真：q.im = [URL, 幅, 高さ, 作者, ライセンス, 説明ページ] ──
+//   ⚠ 写真は Wikimedia Commons の自由なライセンスのもの。作者とライセンスを出すのが使う条件なので、答えたあとは必ず添える。
+//   写真で問う問題（q.iq）は、問題のときは写真だけ（ファイルの名前が答えになるので、リンクは答えたあと）。
+function credit(im) { return `📷 ${esc(im[3] || '作者不明')}（${esc(im[4] || '')}）・<a href="${esc(im[5])}" target="_blank" rel="noopener">Wikimedia Commons</a>`; }
+function photo(q, where) {
+  const im = q.im; if (!im) return '';
+  const r = im[1] && im[2] ? ` width="${im[1]}" height="${im[2]}"` : '';
+  return `<figure class="ph ${where === 'q' ? 'q' : ''}"><img class="${/\.svg/i.test(im[0]) ? 'svg' : ''}" src="${esc(im[0])}" alt="" loading="${where === 'q' ? 'eager' : 'lazy'}" decoding="async"${r} onerror="this.closest('figure').remove()">${where === 'q' ? '' : `<figcaption>${credit(im)}</figcaption>`}</figure>`;
+}
+function thumb(im, px) { return im[0].replace(/\/500px-/, '/' + (px || 250) + 'px-'); }
+function preload(id) { const q = B.byId[id]; if (q && q.im) { const i = new Image(); i.src = q.im[0]; } }
+
 // ════════════════════════════ データ ════════════════════════════
 const B = { q: [], byId: {}, cats: [], catById: {}, hidden: new Set(), v: '' };
 const AVATARS = ['🦊', '🐼', '🦁', '🐧', '🦉', '🐬', '🦖', '🐙', '🐝', '🐢', '🦄', '🐸', '🚀', '⚡', '🌟', '🍙'];
@@ -322,15 +372,15 @@ const TYPE_NAME = { choice: '4たく', tf: '○×', order: 'ならべかえ' };
 const INTERVAL = [0, 1, 3, 7, 14, 30, 60];           // 箱の番号 → 次に出すまでの日数
 
 async function loadBank() {
-  const cached = ls.get('cq.bank');
+  // ⚠ 前は localStorage にも写しを置いていた。2000問と写真で 1MB を超え、同じ場所（konohaacademy.github.io）の
+  //   まなびのテラスと 5MB を分け合っているので やめた。電波が無いときは サービスワーカーのしまったものを使う。
+  ls.del('cq.bank');
   try {
     const r = await fetch('bank.json', { cache: 'no-cache' });
     if (!r.ok) throw new Error(r.status);
-    const bank = await r.json();
-    ls.set('cq.bank', bank);
-    return bank;
+    return await r.json();
   } catch (e) {
-    if (cached) return cached;
+    try { const c = window.caches && await caches.match('bank.json', { ignoreSearch: true }); if (c) return await c.json(); } catch (e2) {}
     throw e;
   }
 }
@@ -467,7 +517,7 @@ function pickNew(n, opt = {}) {
   while (out.length < n && guard++ < 200) {
     const cat = cats[ci % cats.length]; ci++;
     const top = opt.star ? opt.star : topStar(cat); const aim = opt.star ? opt.star : aimStar(cat);
-    let pool = visible().filter(q => q.c === cat && !stOf(q.id) && !taken.has(q.id) && (opt.star ? q.s === opt.star : q.s <= top));
+    let pool = visible().filter(q => q.c === cat && !stOf(q.id) && !taken.has(q.id) && (opt.star ? q.s === opt.star : q.s <= top) && (!opt.filter || opt.filter(q)));
     if (!opt.star) { const hi = pool.filter(q => q.s >= baseStar()); if (hi.length) pool = hi; }   // はじめる★より下は、上がのこっていないときだけ
     if (!pool.length) { if (ci > cats.length * 3 && !out.length) break; continue; }
     const dist = q => Math.abs(q.s - aim) * 2 + (q.s > aim ? 1 : 0);   // ねらいの★ → 1つ下 → 1つ上 … の順
@@ -512,13 +562,17 @@ const TITLES = [
   { id: 'st7', ic: '🔥', name: '一週間マスター', how: '7日 つづけてあそぶ', ok: s => s.best >= 7 },
   { id: 'st30', ic: '🌋', name: 'まいにちの{達人|たつじん}', how: '30日 つづけてあそぶ', ok: s => s.best >= 30 },
   { id: 'st100', ic: '💎', name: '100日の{伝説|でんせつ}', how: '100日 つづけてあそぶ', ok: s => s.best >= 100 },
-  { id: 'all12', ic: '🧭', name: 'なんでも ちょうせん者', how: '12の分野 ぜんぶで 正かいする', ok: s => B.cats.every(c => qsOf(c.id).some(q => knows(q.id))) },
+  { id: 'all12', ic: '🧭', name: 'なんでも ちょうせん者', how: 'ぜんぶの分野で 正かいする', ok: s => B.cats.every(c => qsOf(c.id).some(q => knows(q.id))) },
   { id: 'hs50', ic: '⚡', name: 'はやおし名人', how: 'はやおしチャレンジで 150点', ok: s => s.hs >= 150 },
   { id: 'ta15', ic: '⏱', name: 'スピードスター', how: 'タイムアタックで 15問', ok: s => s.ta >= 15 },
   { id: 'ta30', ic: '🚀', name: 'ひかりの速さ', how: 'タイムアタックで 30問', ok: s => s.ta >= 30 },
+  { id: 'ph30', ic: '📷', name: '写真ハンター', how: '写真カードを 30まい あつめる', ok: s => visible().filter(q => q.im && knows(q.id)).length >= 30 },
+  { id: 'ph150', ic: '🖼', name: '写真{博士|はかせ}', how: '写真カードを 150まい あつめる', ok: s => visible().filter(q => q.im && knows(q.id)).length >= 150 },
+  { id: 'dd50', ic: '🌊', name: 'どんどん{名人|めいじん}', how: 'どんどんモードで 1回に 50問 とく', ok: s => (s.dd || 0) >= 50 },
   { id: 'star5', ic: '🎓', name: '高校生クイズへの切ぷ', how: '★5の問題を 10問 正かいする', ok: s => visible().filter(q => q.s === 5 && knows(q.id)).length >= 10 },
   ...[['ikimono', 'いきもの{博士|はかせ}'], ['uchu', 'うちゅう{飛行士|ひこうし}'], ['kagaku', 'かがく{者|しゃ}'], ['nihon', '日本 たんけん家'], ['sekai', '世界旅行者'], ['rekishi', 'れきし{探偵|たんてい}'],
-    ['kotoba', 'ことばの{魔術師|まじゅつし}'], ['sansu', 'ひらめき{天才|てんさい}'], ['eigo', 'えいごの{達人|たつじん}'], ['bunka', '文化{大使|たいし}'], ['kurashi', 'しくみ{博士|はかせ}'], ['zatsugaku', '雑学王']]
+    ['kotoba', 'ことばの{魔術師|まじゅつし}'], ['sansu', 'ひらめき{天才|てんさい}'], ['eigo', 'えいごの{達人|たつじん}'], ['bunka', '文化{大使|たいし}'], ['kurashi', 'しくみ{博士|はかせ}'], ['zatsugaku', '雑学王'],
+    ['sports', 'スポーツ{博士|はかせ}'], ['tabemono', '食の{達人|たつじん}'], ['gijutsu', '発明{王|おう}'], ['monogatari', '物語の{語り部|かたりべ}']]
     .map(([c, n]) => ({ id: 'm_' + c, ic: '🏅', name: n, cat: c, how: '分野の★1を ぜんぶ おぼえる（★5まで ひらく）', ok: s => { const a = qsOf(c, 1); return a.length > 0 && a.every(q => mastered(q.id)); } })),
 ];
 function checkTitles() {
@@ -549,7 +603,7 @@ document.addEventListener('click', e => {
 const ROUTES = {
   home: () => home(), map: () => mapScreen(), cat: c => catScreen(c), zukan: c => zukan(c), titles: () => titles(),
   rank: () => ranking(), settings: () => settings(), review: () => startReview(), hayaoshi: () => startHayaoshi(), ta: () => startTA(),
-  quest: () => startQuest(), gate: () => gate(),
+  quest: () => startQuest(), gate: () => gate(), dondon: f => f ? startDondon(f) : dondonMenu(), okawari: () => startOkawari(), photos: () => zukan('photo'),
 };
 
 // ════════════════════════════ 入口 ════════════════════════════
@@ -558,7 +612,7 @@ function gate(msg) {
   show(`<div class="gate">
     <div class="gate-icons" aria-hidden="true">${B.cats.map((c, i) => `<span style="--c:${c.color};animation-delay:${i * 60}ms">${c.icon}</span>`).join('')}</div>
     <h1>ちしき<span>クエスト</span></h1>
-    <p class="lead">1日8問。まちがえた問題は、わすれたころに もう一度。<br>いきものから うちゅう、れきし、ことばまで。小学生から <b>高校生クイズ</b>まで つづく 12の分野を たんけんしよう。</p>
+    <p class="lead">1日8問。まちがえた問題は、わすれたころに もう一度。<br>いきものから うちゅう、れきし、ことばまで。小学生から <b>高校生クイズ</b>まで つづく ${B.cats.length}の分野を たんけんしよう。</p>
     ${ps.length ? `<div class="who">${ps.map((p, i) => `<button class="whob" data-pick="${i}"><span class="ava">${esc(p.ava || '🦊')}</span>${esc(p.name)}<span class="sp"></span></button>`).join('')}</div>` : ''}
     <div class="row2"><button class="big red" id="g-new">はじめての人</button>${API ? `<button class="big ghost" id="g-login">ほかの たんまつで 作った人</button>` : ''}</div>
     <p class="err">${esc(msg || '')}</p>
@@ -704,13 +758,15 @@ function home() {
   <div class="sec"><div class="quest">
     <div class="eyebrow">きょうのクエスト</div>
     <h2>${done ? 'クリア！ また あした' : qd.i ? 'つづきから' : n + '問に ちょうせん'}</h2>
-    <div class="small">${done ? `${qd.ok}/${n}問 正かい。ふくしゅうや はやおしで もっと あそべるよ` : `ふくしゅう と 新しい問題が まざっているよ`}</div>
+    <div class="small">${done ? `${qd.ok}/${n}問 正かい。まだまだ 新しい問題が あるよ！` : `ふくしゅう と 新しい問題が まざっているよ`}</div>
     <div class="dots">${qd.ids.map((_, i) => `<i class="${i < qd.i ? 'd' : ''}"></i>`).join('')}</div>
-    <div class="row">${done ? `<button class="big ghost" data-go="map">ちしきの地図へ</button>` : `<button class="big" data-go="quest">${qd.i ? 'つづける' : 'はじめる'} ▶</button>`}</div>
+    <div class="row">${done ? `<button class="big" data-go="okawari">おかわり 8問 ▶</button><button class="big ghost" data-go="dondon">どんどん</button>` : `<button class="big" data-go="quest">${qd.i ? 'つづける' : 'はじめる'} ▶</button>`}</div>
   </div></div>
   ${a2hsCard('home')}
   <div class="sec"><h2>あそびかた</h2><div class="modes">
-    <button class="mode" data-go="map"><span class="ic">🗺</span><b>ちしきの地図</b><span>12の分野を ★1から ★5へ</span></button>
+    <button class="mode" data-go="dondon"><span class="ic">🌊</span><b>どんどん</b><span>おわりなし！ まだ見ていない問題を つぎつぎ</span></button>
+    <button class="mode" data-go="photos"><span class="ic">📷</span><b>写真ずかん</b><span>${visible().filter(q => q.im && knows(q.id)).length} / ${visible().filter(q => q.im).length} まい あつめた</span></button>
+    <button class="mode" data-go="map"><span class="ic">🗺</span><b>ちしきの地図</b><span>${B.cats.length}の分野を ★1から ★5へ</span></button>
     <button class="mode" data-go="hayaoshi"><span class="ic">🔴</span><b>はやおし</b><span>問題文が 出てくるとちゅうで ピンポン！</span></button>
     <button class="mode" data-go="ta"><span class="ic">⏱</span><b>タイムアタック</b><span>60びょうで 何問とける？</span></button>
     <button class="mode" data-go="review"><span class="ic">🔁</span><b>ふくしゅう${due ? `<span class="badge num">${due}</span>` : ''}</b><span>わすれかけた問題を もう一度</span></button>
@@ -725,7 +781,7 @@ function home() {
   <p class="note" style="margin-top:24px">${esc(CUR.name)} であそんでいます。 <button class="back small" data-go="gate">ほかの人に かわる</button></p>`, 'home');
   a2hsWire();
 }
-// 12の分野ごとに「正かいしたことがある」わりあいを、かたちで見せる
+// 分野ごとに「正かいしたことがある」わりあいを、かたちで見せる
 function radar() {
   const W = 320, C = W / 2, R = 108; const n = B.cats.length;
   const pt = (i, r) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return [C + r * Math.cos(a), C + r * Math.sin(a)]; };
@@ -809,9 +865,10 @@ function nextQ() {
       <div class="prog">${G.res.map((r, k) => `<i class="${r || (k === G.i ? 'now' : '')}"></i>`).join('')}</div>
       <span class="chip num">⭐ ${G.gain}</span></div>
     <div class="card"><div class="qhead"><span class="tag" style="background:${cat.color}">${cat.icon} ${rb(cat.name)}</span><span class="qstar">${'★'.repeat(q.s)}</span><span class="qtype">${TYPE_NAME[q.t]}${G.i >= G.firstLen ? '・もう一度' : ''}</span></div>
-      <div class="qtext">${rb(q.q)}</div>
+      <div class="qtext">${rb(q.q)}</div>${q.iq ? photo(q, 'q') : ''}
       <div id="ansarea"></div><div id="fbarea"></div></div>`, 'play');
   $('#quit').onclick = () => { sync(true); ROUTES[G.back.split(':')[0]](G.back.split(':')[1]); };
+  if (G.ids[G.i + 1]) preload(G.ids[G.i + 1]);
   renderAnswer(q, $('#ansarea'), (ok, pickedHtml) => afterAnswer(q, ok));
 }
 // 答える部分（4たく・○×・ならべかえ）。done(ok) を1回だけ呼ぶ
@@ -873,6 +930,7 @@ function afterAnswer(q, ok) {
   $('#fbarea').innerHTML = `<div class="fb">
     <div class="stamp"><span class="mk ${ok ? 'o' : 'x'}">${ok ? '○' : '×'}</span><div><b>${ok ? 'せいかい！' : 'ざんねん！'}</b>${gain ? ` <span class="muted small">+${gain}⭐</span>` : ''}
       ${q.t !== 'choice' || !ok ? `<div class="ans">こたえ：${answerText(q)}</div>` : ''}</div></div>
+    ${q.iq ? (q.im ? `<div class="note">${credit(q.im)}</div>` : '') : photo(q)}
     <div class="exp">${rb(q.e)}</div>
     ${q.f ? `<div class="fact">${rb(q.f)}</div>` : ''}
     <button class="big next" id="nx">つぎへ ▶</button></div>`;
@@ -886,13 +944,106 @@ function finish() {
   const got = checkTitles();
   sync(true);
   show(`<div class="result" style="margin-top:28px">
-    <h1>${G.mode === 'quest' ? 'クエスト クリア！' : 'おつかれさま！'}</h1>
+    <h1>${G.mode === 'quest' ? 'クエスト クリア！' : G.mode === 'okawari' ? 'おかわり クリア！' : 'おつかれさま！'}</h1>
     <div class="bigscore num">${okN}<small> / ${total}問</small></div>
     <div class="gains"><span class="chip">⭐ +${G.gain}</span><span class="chip">🔥 ${s.streak}日 れんぞく</span></div>
     ${got.map(t => `<div class="new-title"><span class="small muted">新しい しょうごう</span><b>${t.ic} ${rb(t.name)}</b></div>`).join('')}
-    <div class="row2" style="justify-content:center;margin-top:8px"><button class="big" data-go="home">ホームへ</button>${G.back !== 'home' ? `<button class="big ghost" data-go="${G.back}">もどる</button>` : ''}</div>
+    ${G.mode === 'quest' || G.mode === 'okawari' ? `<p class="note">まだ 見ていない問題が ${visible().filter(q => !stOf(q.id) && q.s <= topStar(q.c)).length}問 あるよ</p>
+      <div class="okw"><button class="big" data-go="okawari">おかわり 8問 ▶</button><button class="big ghost" data-go="dondon">どんどん</button></div>` : ''}
+    ${metHtml(G.ids.slice(0, G.firstLen))}
+    <div class="row2" style="justify-content:center;margin-top:8px"><button class="big ${G.mode === 'quest' || G.mode === 'okawari' ? 'ghost' : ''}" data-go="home">ホームへ</button>${G.back !== 'home' ? `<button class="big ghost" data-go="${G.back}">もどる</button>` : ''}</div>
   </div>`, 'result');
   if (got.length) beep('up');
+}
+
+// ════════════════════════════ おかわり ════════════════════════════
+// きょうのクエストのあとに もう8問。ふくしゅうは3問まで（その日に解いたものは出ない）、のこりは 新しい問題
+function startOkawari() {
+  const due = dueList().slice(0, QUEST_DUE).map(q => q.id);
+  let ids = shuffle(due.concat(pickNew(8 - due.length, { not: due })));
+  if (!ids.length) { toast('ひらいている問題は ぜんぶ 見たよ！ 地図で つぎの★を ひらこう'); return mapScreen(); }
+  play({ mode: 'okawari', title: 'おかわり', ids, back: 'home' });
+}
+// その回に出会った写真を 小さく並べる（「こんなに見た！」がわかるように）
+function metHtml(ids) {
+  const ims = ids.map(id => B.byId[id]).filter(q => q && q.im);
+  if (!ims.length) return '';
+  return `<div style="width:100%"><p class="small muted" style="margin:0 0 6px">この回で 出会った 写真</p><div class="met">${ims.slice(0, 24).map(q => `<img src="${esc(thumb(q.im))}" alt="" loading="lazy" onerror="this.remove()">`).join('')}</div></div>`;
+}
+
+// ════════════════════════════ どんどん ════════════════════════════
+// おわりなし。分野をまぜて まだ見ていない問題を つぎつぎ出す（5問に1問は ふくしゅう）。こたえあわせは短く、くわしくは ひらいたときだけ。
+function ddFilter(f) {
+  if (!f || f === 'all') return null;
+  if (f === 'photo') return q => !!q.im;
+  if (f === 'photoq') return q => !!q.iq;
+  return q => q.c === f;
+}
+function dondonMenu() {
+  const nNew = f => visible().filter(q => !stOf(q.id) && q.s <= topStar(q.c) && (!ddFilter(f) || ddFilter(f)(q))).length;
+  show(`${topbar(true)}<h1 style="font-size:1.5rem">🌊 どんどん</h1>
+  <p class="muted small">おわりは ないよ。まだ 見ていない問題が つぎつぎ出てくる。やめたいときは ✕。</p>
+  <div class="ddpick" style="margin-top:12px">
+    <button class="mode" data-go="dondon:all"><span class="ic">🌈</span><b>ぜんぶの分野を まぜる</b><span>まだ見ていない問題 ${nNew('all')}問</span></button>
+    <button class="mode" data-go="dondon:photo"><span class="ic">📷</span><b>写真つきの問題だけ</b><span>まだ見ていない問題 ${nNew('photo')}問</span></button>
+    <button class="mode" data-go="dondon:photoq"><span class="ic">🔍</span><b>写真を見て こたえる問題だけ</b><span>まだ見ていない問題 ${nNew('photoq')}問</span></button>
+  </div>
+  <div class="sec"><h2>分野を えらぶ</h2><div class="ddcats">${B.cats.map(c => `<button data-go="dondon:${c.id}"><i>${c.icon}</i><span>${rb(c.name)}<br><span class="muted small num">${nNew(c.id)}問</span></span></button>`).join('')}</div></div>`, 'dondon');
+}
+function startDondon(f) {
+  G = { mode: 'dondon', filter: f, n: 0, ok: 0, fresh: 0, combo: 0, gain: 0, seen: [], next: null };
+  ddNext();
+}
+function ddPick() {
+  const pred = ddFilter(G.filter); const ok = q => !G.seen.includes(q.id) && (!pred || pred(q));
+  if (G.n % 5 === 4) { const d = dueList().find(ok); if (d) return d.id; }
+  const one = (B.catById[G.filter] ? pickNew(1, { not: G.seen, cats: [G.filter] }) : pickNew(1, { not: G.seen, filter: pred }));
+  if (one.length) return one[0];
+  // 新しい問題が もう無ければ、まえに解いた問題を「おぼえていない・ひさしぶり」の順に
+  const box = q => (stOf(q.id) || [0, 0, 0])[2], lastd = q => (stOf(q.id) || [0, 0, 0, 0, 0])[4];
+  const old = visible().filter(q => ok(q) && q.s <= topStar(q.c) && lastd(q) !== today()).sort((a, b) => box(a) - box(b) || lastd(a) - lastd(b));
+  return old.length ? old[0].id : null;
+}
+function ddNext() {
+  const id = G.next || ddPick(); G.next = null;
+  if (!id) { toast('この なかまの 問題は ぜんぶ 見たよ！'); return ddEnd(); }
+  const q = B.byId[id]; const cat = B.catById[q.c]; const isNew = !stOf(q.id);
+  G.seen.push(id); G.t0 = performance.now();
+  show(`<div class="playtop"><button class="iconbtn" id="quit" aria-label="やめる">✕</button>
+      <span class="chip num">🌊 ${G.n + 1}問め</span><span class="chip num">✅ ${G.ok}</span>${G.combo >= 3 ? `<span class="chip num">🔥${G.combo}</span>` : ''}<span class="sp" style="flex:1"></span></div>
+    <div class="card"><div class="qhead"><span class="tag" style="background:${cat.color}">${cat.icon} ${rb(cat.name)}</span><span class="qstar">${'★'.repeat(q.s)}</span><span class="qtype">${TYPE_NAME[q.t]}${isNew ? '' : '・ふくしゅう'}</span></div>
+      <div class="qtext">${rb(q.q)}</div>${q.iq ? photo(q, 'q') : ''}
+      <div id="ansarea"></div><div id="fbarea"></div></div>`, 'play');
+  $('#quit').onclick = () => ddEnd();
+  renderAnswer(q, $('#ansarea'), ok => {
+    const gain = record(q, ok, performance.now() - G.t0, 'dondon');
+    G.n++; G.gain += gain; if (isNew) G.fresh++;
+    if (ok) { G.ok++; G.combo++; } else G.combo = 0;
+    beep(ok ? 'ok' : 'ng');
+    const sp = String(q.e).match(/^[^。]*。?/)[0]; const rest = q.e.slice(sp.length);
+    $('#fbarea').innerHTML = `<div class="fb">
+      <div class="stamp"><span class="mk ${ok ? 'o' : 'x'}">${ok ? '○' : '×'}</span><div><b>${ok ? 'せいかい！' : 'ざんねん！'}</b> <span class="muted small">+${gain}⭐</span>
+        ${q.t !== 'choice' || !ok ? `<div class="ans">こたえ：${answerText(q)}</div>` : ''}</div></div>
+      ${q.iq ? (q.im ? `<div class="note">${credit(q.im)}</div>` : '') : photo(q)}
+      <div class="lead1">${rb(sp)}</div>
+      ${rest.trim() || q.f ? `<details class="more2"><summary>▼ くわしく</summary><div class="exp">${rb(rest)}</div>${q.f ? `<div class="fact">${rb(q.f)}</div>` : ''}</details>` : ''}
+      <div class="fbrow"><button class="big next" id="nx">つぎへ ▶</button></div></div>`;
+    $('#nx').onclick = () => ddNext();
+    $('#nx').focus({ preventScroll: true });
+    $('#fbarea').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    G.next = ddPick(); if (G.next) preload(G.next);   // つぎの写真を 先に よみこむ
+  });
+}
+function ddEnd() {
+  const s = P(); if (G.n > (s.dd || 0)) { s.dd = G.n; storeSave(); }
+  const got = checkTitles(); sync(true);
+  if (!G.n) return dondonMenu();
+  show(`<div class="result" style="margin-top:28px"><h1>どんどん おつかれさま！</h1>
+    <div class="bigscore num">${G.n}<small> 問</small></div>
+    <div class="gains"><span class="chip">✅ ${G.ok}問 正かい</span><span class="chip">✨ はじめての問題 ${G.fresh}</span><span class="chip">⭐ +${G.gain}</span></div>
+    ${got.map(t => `<div class="new-title"><span class="small muted">新しい しょうごう</span><b>${t.ic} ${rb(t.name)}</b></div>`).join('')}
+    ${metHtml(G.seen)}
+    <div class="row2" style="justify-content:center"><button class="big" data-go="dondon:${G.filter}">つづける</button><button class="big ghost" data-go="home">ホームへ</button></div></div>`, 'result');
 }
 
 // ════════════════════════════ はやおし ════════════════════════════
@@ -924,7 +1075,7 @@ function hsQ() {
   show(`<div class="playtop"><button class="iconbtn" id="quit" aria-label="やめる">✕</button>
       <div class="prog">${G.res.map((r, j) => `<i class="${r || (j === G.i ? 'now' : '')}"></i>`).join('')}</div><span class="chip score num">${G.score}点</span></div>
     <div class="card"><div class="qhead"><span class="tag" style="background:${cat.color}">${cat.icon} ${rb(cat.name)}</span><span class="qstar">${'★'.repeat(q.s)}</span><span class="qtype">はやおし</span></div>
-      <div class="qtext" id="hq"></div><div id="hbtn"><button class="buzzer" id="bz">ピンポン!</button><p class="note" style="text-align:center">わかったら すぐ おそう。はやいほど 点が 高いよ</p></div>
+      <div class="qtext" id="hq"></div>${q.iq ? photo(q, 'q') : ''}<div id="hbtn"><button class="buzzer" id="bz">ピンポン!</button><p class="note" style="text-align:center">わかったら すぐ おそう。はやいほど 点が 高いよ</p></div>
       <div id="ansarea"></div><div id="fbarea"></div></div>`, 'play');
   $('#quit').onclick = () => { clearInterval(timer); sync(true); home(); };
   const hq = $('#hq');
@@ -952,7 +1103,7 @@ function hsQ() {
         const gain = record(q, ok, performance.now() - t0, 'hayaoshi'); G.gain += gain;
         beep(ok ? 'ok' : 'ng');
         $('#fbarea').innerHTML = `<div class="fb"><div class="stamp"><span class="mk ${ok ? 'o' : 'x'}">${ok ? '○' : '×'}</span><div><b>${ok ? `+${pts}点` : timeout ? 'じかんぎれ' : 'ざんねん'}</b>${ok && bonus ? `<span class="muted small"> はやおしボーナス ${bonus}</span>` : ''}<div class="ans">こたえ：${answerText(q)}</div></div></div>
-          <div class="exp">${rb(q.e)}</div><button class="big next" id="nx">つぎへ ▶</button></div>`;
+          ${q.iq ? (q.im ? `<div class="note">${credit(q.im)}</div>` : '') : photo(q)}<div class="exp">${rb(q.e)}</div><button class="big next" id="nx">つぎへ ▶</button></div>`;
         $('#nx').onclick = () => { G.i++; hsQ(); };
       };
       renderAnswer(q, $('#ansarea'), ok => answer(ok, false));
@@ -988,7 +1139,7 @@ function taQ() {
   show(`<div class="playtop"><button class="iconbtn" id="quit" aria-label="やめる">✕</button><div style="flex:1" class="timer"><b id="tb" style="width:${Math.max(0, G.end - performance.now()) / 600}%"></b></div>
     <span class="chip num"><span id="tl">60</span>びょう</span><span class="chip num">✅ ${G.ok}</span></div>
     <div class="card"><div class="qhead"><span class="tag" style="background:${cat.color}">${cat.icon} ${rb(cat.name)}</span>${G.combo >= 3 ? `<span class="qstar">${G.combo} コンボ！</span>` : ''}</div>
-    <div class="qtext">${rb(q.q)}</div><div id="ansarea"></div></div>`, 'play');
+    <div class="qtext">${rb(q.q)}</div>${q.iq ? photo(q, 'q') : ''}<div id="ansarea"></div></div>`, 'play');
   $('#quit').onclick = () => { clearInterval(G.tick); sync(true); home(); };
   renderAnswer(q, $('#ansarea'), ok => {
     record(q, ok, performance.now() - t0, 'ta'); G.gain += ok ? 10 : 0;
@@ -1012,16 +1163,44 @@ function taEnd() {
 
 // ════════════════════════════ ずかん・しょうごう・ランキング・せってい ════════════════════════════
 function zukan(cid) {
-  cid = cid || ls.get('cq.zk', B.cats[0].id);
+  cid = cid || ls.get('cq.zk', 'photo');
+  if (cid !== 'photo' && !B.catById[cid]) cid = 'photo';
   ls.set('cq.zk', cid);
+  const tabs = `<div class="tabs" style="margin-top:8px"><button class="${cid === 'photo' ? 'on' : ''}" data-go="zukan:photo">📷 写真</button>${B.cats.map(c => `<button class="${c.id === cid ? 'on' : ''}" data-go="zukan:${c.id}">${c.icon} ${rb(c.name)}</button>`).join('')}</div>`;
+  if (cid === 'photo') {
+    // 写真カード：正かいした問題の写真。見たけれど まだ正かいしていないものは ぼかして出す（もう一度 ちょうせんしたくなるように）
+    const all = visible().filter(q => q.im);
+    const got = all.filter(q => knows(q.id)).sort((a, b) => (stOf(b.id)[4] - stOf(a.id)[4]) || a.c.localeCompare(b.c));
+    const tried = all.filter(q => stOf(q.id) && !knows(q.id));
+    show(`${topbar(true)}<h1 style="font-size:1.5rem">写真ずかん</h1>
+    <p class="muted small">写真つきの問題に 正かいすると、カードが ふえるよ。タップすると くわしく見られるよ。</p>${tabs}
+    <p class="small num" style="margin:10px 0"><b>${got.length}</b> / ${all.length} まい</p>
+    ${got.length || tried.length ? `<div class="pgrid">${got.map(q => `<button class="pc" data-q="${q.id}"><img class="${/\.svg/i.test(q.im[0]) ? 'svg' : ''}" src="${esc(thumb(q.im))}" alt="" loading="lazy" decoding="async" onerror="this.style.visibility='hidden'"><span>${q.t === 'choice' ? rb(q.o[q.a]) : rb(B.catById[q.c].icon + ' ' + plain(q.q).slice(0, 18))}</span></button>`).join('')}
+      ${tried.map(q => `<button class="pc lock" data-q="${q.id}"><img src="${esc(thumb(q.im, 120))}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><span>？ もう一度</span></button>`).join('')}</div>`
+      : `<p class="muted">まだ カードが ないよ。<button class="btn" data-go="dondon:photo">📷 写真の問題で あそぶ</button></p>`}`, 'zukan');
+    app().querySelectorAll('.pc').forEach(b => b.onclick = () => zkCard(b.dataset.q));
+    return;
+  }
   const got = visible().filter(q => q.c === cid && knows(q.id));
   const all = qsOf(cid).length;
   show(`${topbar(true)}<h1 style="font-size:1.5rem">ずかん</h1>
-  <p class="muted small">正かいした問題が カードに なって たまっていくよ。タップすると せつめいが 出るよ。</p>
-  <div class="tabs" style="margin-top:8px">${B.cats.map(c => `<button class="${c.id === cid ? 'on' : ''}" data-go="zukan:${c.id}">${c.icon} ${rb(c.name)}</button>`).join('')}</div>
+  <p class="muted small">正かいした問題が カードに なって たまっていくよ。タップすると せつめいが 出るよ。</p>${tabs}
   <p class="small num" style="margin:10px 0"><b>${got.length}</b> / ${all} まい</p>
-  <div class="list">${got.length ? got.sort((a, b) => a.s - b.s).map(q => `<button class="zk"><span class="qstar small">${'★'.repeat(q.s)}</span><span>${rb(q.q)}</span><span class="a">→ ${answerText(q)}</span><span class="more">${rb(q.e)}${q.f ? '<br>💡 ' + rb(q.f) : ''}</span></button>`).join('') : `<p class="muted">まだ カードが ないよ。この分野の問題に ちょうせんしよう！</p>`}</div>`, 'zukan');
-  app().querySelectorAll('.zk').forEach(b => b.onclick = () => b.classList.toggle('open'));
+  <div class="list">${got.length ? got.sort((a, b) => a.s - b.s).map(q => `<button class="zk" data-q="${q.id}">${q.im ? `<img class="th" src="${esc(thumb(q.im, 120))}" alt="" loading="lazy" onerror="this.remove()">` : ''}<span class="qstar small">${'★'.repeat(q.s)}</span><span>${rb(q.q)}</span><span class="a">→ ${answerText(q)}</span></button>`).join('') : `<p class="muted">まだ カードが ないよ。この分野の問題に ちょうせんしよう！</p>`}</div>`, 'zukan');
+  app().querySelectorAll('.zk').forEach(b => b.onclick = () => zkCard(b.dataset.q));
+}
+// カードを大きく見る（写真・問題・こたえ・せつめい）。まだ正かいしていないものは こたえを出さず「ちょうせん」だけ
+function zkCard(id) {
+  const q = B.byId[id]; if (!q) return; const cat = B.catById[q.c]; const k = knows(id);
+  const m = document.createElement('div'); m.className = 'modal';
+  m.innerHTML = `<div class="card" role="dialog" aria-modal="true"><div class="qhead"><span class="tag" style="background:${cat.color}">${cat.icon} ${rb(cat.name)}</span><span class="qstar">${'★'.repeat(q.s)}</span><span class="sp" style="flex:1"></span><button class="iconbtn" data-x aria-label="とじる">✕</button></div>
+    ${k ? photo(q) : ''}<div class="qtext" style="min-height:0">${rb(q.q)}</div>
+    ${k ? `<div class="ans">→ ${answerText(q)}</div><div class="exp" style="margin-top:8px">${rb(q.e)}</div>${q.f ? `<div class="fact" style="margin-top:8px">${rb(q.f)}</div>` : ''}`
+        : `<p class="muted">まだ 正かいしていない問題だよ。</p><button class="big" data-try>ちょうせんする ▶</button>`}</div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.onclick = e => { if (e.target === m || e.target.closest('[data-x]')) close(); };
+  const t = m.querySelector('[data-try]'); if (t) t.onclick = () => { close(); play({ mode: 'cat', title: 'もう一度', ids: [id], back: 'zukan:photo' }); };
 }
 function titles() {
   const s = P();

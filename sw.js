@@ -2,7 +2,7 @@
 //  ⚠ いつもは ネットを先に見る（問題や画面を直したら、次に開いたときに新しいものが出る）。つながらないときだけ しまったものを出す。
 //  ⚠ konohaacademy.github.io は まなびのテラス（/manabi/）と同じ場所。ここは /quiz/ の中だけを受け持ち、しまう名前も cq- で始める。
 'use strict';
-const CACHE = 'cq-v1';
+const CACHE = 'cq-v2';   // 2026-10-23：2044問と写真になったので入れかえ
 const SHELL = ['./', './index.html', './bank.json', './manifest.json', './icon.svg', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
